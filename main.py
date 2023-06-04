@@ -13,7 +13,7 @@ community = 'PSIPUB'  ## Community rezetec site.
 ips = []  ## Pole pro nacteni IP adres site.
 found_ips = [] ## Nalezene IP adresy v
 
-
+# Vypocita pocet bitu
 def bit_count(self):
     return bin(self).count("1")
 
@@ -27,8 +27,8 @@ def run_cmd(host, oid):
                    0, 25,
                    ObjectType(ObjectIdentity(oid)))
 
-
-def process_subnet(ip, net_mask):
+# Vypocita pocet bytu subnetu
+def count_subnet(ip, net_mask):
     last_ip = ip.split('.', 3)
     last_net_mask = net_mask.split('.', 3)
     bits = 0
@@ -83,12 +83,12 @@ try:
                     # print('--> ' + temp)
                     errorIndication, errorStatus, errorIndex, varBinds = next(g)
                     temp = varBinds[0][-1].prettyPrint()
-    print('Found IPs: ')
+    print('Found IPs: ') ## Vypis nalezenych IP adres
     for i in range(len(ips)):
         print('-> ' + ips[i])
     print('Done scanning!')
-    for i in range(int(len(ips) / 2)):
-        print('For router on ip: ' + ips[i * 2] + ' is subnet ' + ips[i * 2] + '/'
-              + str(31 - process_subnet(ips[i * 2], ips[i * 2 + 1])))
+    for i in range(int(len(ips) / 2)): ## Vypis ve formatu IP_router + IP_subnet
+        print('For router on ip: ' + ips[i * 2 + 1] + ' is subnet ' + ips[i * 2] + '/'
+              + str(31 - count_subnet(ips[i * 2], ips[i * 2 + 1])))
 except StopIteration:
-    print('Ending with error')
+    print('Ending with error') ## Vypis chyby
