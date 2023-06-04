@@ -15,12 +15,30 @@ více IP adresami.
 
 ### Popis funkčnosti:
 
-- 
+- Program nejpre zjístí default gateway zařízení, na kterém je spuštěn. Následně na tuto adresu pošle SNMP command.
+Ten vrátí obash routovací tabulky routeru s danou IP. Následně se pro každou nalezenou IP zavolá stejný command.
+Výsledkem je dvojice adres - IP routeru a IP sítě. Nakonec se z toho zjistí podsítě všech routerů a ty se vypíší.
+
+### Příklad výstupu
+
+    Found IPs: 
+    -> 10.0.1.0
+    -> 10.0.1.254
+    -> 10.0.2.0
+    -> 10.0.2.254
+    -> 192.168.1.0
+    -> 192.168.1.1
+    Done scanning!
+    For router on ip: 10.0.1.254 is subnet 10.0.1.0/24
+    For router on ip: 10.0.2.254 is subnet 10.0.2.0/24
+    For router on ip: 192.168.1.1 is subnet 192.168.1.0/30
+
 
 ### Implementace:
 
-- 
+- Program je implementován v jazyce Python za použití knihoven scapy, pro zjištění default gateway, a pysnmp, pro
+použití SNMP commandů pro Python.
 
 ### Spuštění
 
-- ./build/client/client <cislo_port> <obsah_zpravy>
+- python3 main.py
