@@ -1,99 +1,70 @@
-import socket
-import struct
-import subprocess
-
 from pysnmp.hlapi import *
+from scapy.all import *
 
-ipAdEntAddr = "1.3.6.1.2.1.4.24.1.4"
-
-SNMP_PORT = 161
-
-
-def mib_category(host):
-    iterator = bulkCmd(
-        SnmpEngine(),
-        CommunityData('public', mpModel=1),
-        UdpTransportTarget((host, SNMP_PORT)),
-        ContextData(),
-        0, 50,
-        ObjectType(ObjectIdentity(ipAdEntAddr)),
-        lexicographicMode=False
-    )
-
-    varBinds = next(iterator)
-    print(varBinds[0])
+SNMP_PORT = 161  ## port pro SNMP
+ipAdEntAddr = "1.3.6.1.2.1.4.21.1.1.2"  ## oid pro ipRouteDest
+ip = conf.route.route('0.0.0.0')[2]  ## default gateway zarizeni
+community = 'PSIPUB' ## Community rezetec site.
 
 
-def get_mib_category(host, category):
-    end = category[:-1] + str((int(category[-1]) + 1))
-    print(end)
-
-    my_cmd = f"snmpwalk -c PSIPUB -v1 -CE {end} {host} {category}"
-    run_my_cmd = subprocess.run(my_cmd, shell=True, capture_output=True)
-
-    return run_my_cmd.stdout.decode().splitlines()
-
-
-def default_gateway():
-    with open("/proc/net/route") as file_header:
-        for line_values in file_header:
-            values = line_values.strip().split()
-            if values[1] != '00000000' or not int(values[3], 16) & 2:
-                # If not default route or not RTF_GATEWAY, skip it
-                continue
-
-            return socket.inet_ntoa(struct.pack("<L", int(values[2], 16)))
+## Funkce pro vytvoreni pysnmp commandu.
+def walk_remote(host, oid):
+    return bulkCmd(SnmpEngine(),
+                   CommunityData(community, mpModel=1),
+                   UdpTransportTarget((host, SNMP_PORT), timeout=0.0, retries=0),
+                   ContextData(),
+                   0, 25,
+                   ObjectType(ObjectIdentity(oid)))
 
 
-def parse_value(value):
-    split_values = str.split(value, sep=" ")
+ips = [] ## Pole pro nacteni IP adres site.
 
-    return split_values[-1]
-
-
-def apply_mask(network, mask):
-    network_list = str(network).split(sep=".")
-    mask_list = str(mask).split(sep=".")
-
-    for i in range(0, len(network_list)):
-        temp = int(mask_list[i]) & int(network_list[i])
-        network_list[i] = str(temp)
-
-    return f"{network_list[0]}.{network_list[1]}.{network_list[2]}.{network_list[3]}"
-
-
-def get_mask(mask):
-    number_of_mask = 0
-    mask = str(mask).split(sep=".")
-
-    for i in range(0, 4):
-        mask_byte = int(mask[i])
-
-        if mask_byte == 255:
-            number_of_mask += 8
+try:
+    print('Starting scanning...')
+    g = walk_remote(ip, ipAdEntAddr) ## Vytvoreni SNMP prikazu.
+    errorIndication, errorStatus, errorIndex, varBinds = next(g) ## Spusteni prvni SNMP prikazu.
+    temp = varBinds[0][-1].prettyPrint() ## Ziskani prvni IP adresy.
+    print('nalezene IP v prvnim nodu:')
+    while len(temp) > 1: ## Pokud SNMP vraci IP adresy.
+        ips.append(temp) ## Pridam adresu do pole.
+        print('-> ' + str(temp))
+        errorIndication, errorStatus, errorIndex, varBinds = next(g) ## Dalsi spusteni
+        ## Odchyceni chyb a jejich vypis.
+        if errorIndication:
+            print('errorIndication: ' + str(errorIndication) + ' (' + str(temp) + ')')
+            continue
+        elif errorStatus:
+            print('errorStatus: ' + str(errorStatus) + ' (' + str(temp) + ')')
+            continue
+        elif errorIndex:
+            print('errorIndex: ' + str(errorIndex) + ' (' + str(temp) + ')')
+            continue
         else:
-            while mask_byte & 128 > 0:
-                number_of_mask += 1
-                mask_byte = mask_byte << 1
-            break
-    return number_of_mask
-
-
-def network_with_mask(addr, mask):
-    current_mask = get_mask(mask)
-    if current_mask == 0 or current_mask == 32:
-        return ""
-
-    return f"{apply_mask(addr, mask)}/{current_mask}"
-
-print("Start scanning...")
-
-visited = []
-to_visit = [default_gateway()]
-
-visited_networks = []
-
-to_visit_new_level = []
-
-
-print("Scanning done.")
+            temp = varBinds[0][-1].prettyPrint()
+    print('-------------------------------')
+    ## Nyni se projdou vsechny nalezene zarizeni podle IP adres.
+    for i in range(len(ips)):
+        print('nalezene IP v na IP: ' + ips[i])
+        g = walk_remote(ips[i], ipAdEntAddr)
+        for j in range(4):
+            errorIndication, errorStatus, errorIndex, varBinds = next(g)
+            if errorIndication:
+                print('errorIndication: ' + str(errorIndication) + ' (' + str(ips[i]) + ')')
+                break
+            elif errorStatus:
+                print('errorStatus: ' + str(errorStatus) + ' (' + str(ips[i]) + ')')
+                break
+            elif errorIndex:
+                print('errorIndex: ' + str(errorIndex) + ' (' + str(ips[i]) + ')')
+                break
+            else:
+                temp = varBinds[0][-1].prettyPrint()
+                ## Vypisou se vsechny nalezene adresy.
+                while len(temp) > 1:
+                    ips.append(temp)
+                    print('--> ' + temp)
+                    errorIndication, errorStatus, errorIndex, varBinds = next(g)
+                    temp = varBinds[0][-1].prettyPrint()
+    print('Done scanning!')
+except StopIteration:
+    print('koncim')
